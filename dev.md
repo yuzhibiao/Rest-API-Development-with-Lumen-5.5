@@ -814,6 +814,447 @@ class Controller extends BaseController
 
 ### ResponseTrait
 
+```
+<?php //app/Http/Controllers/ResponseTrait.php
+ 
+namespace App\Http\Controllers;
+ 
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Model;
+use League\Fractal\Manager;
+use League\Fractal\Pagination\IlluminatePaginatorAdapter;
+use League\Fractal\Resource\Collection;
+use League\Fractal\Resource\Item;
+use League\Fractal\TransformerAbstract;
+ 
+trait ResponseTrait
+{
+    /**
+     * Status code of response
+     *
+     * @var int
+     */
+    protected $statusCode = 200;
+ 
+    /**
+     * Fractal manager instance
+     *
+     * @var Manager
+     */
+    protected $fractal;
+ 
+    /**
+     * Set fractal Manager instance
+     *
+     * @param Manager $fractal
+     * @return void
+     */
+    public function setFractal(Manager $fractal)
+    {
+        $this->fractal = $fractal;
+    }
+ 
+    /**
+     * Getter for statusCode
+     *
+     * @return mixed
+     */
+    public function getStatusCode()
+    {
+        return $this->statusCode;
+    }
+ 
+    /**
+     * Setter for statusCode
+     *
+     * @param int $statusCode Value to set
+     *
+     * @return self
+     */
+    public function setStatusCode($statusCode)
+    {
+        $this->statusCode = $statusCode;
+ 
+        return $this;
+    }
+ 
+    /**
+     * Send custom data response
+     *
+     * @param $status
+     * @param $message
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function sendCustomResponse($status, $message)
+    {
+        return response()->json(['status' => $status, 'message' => $message], $status);
+    }
+ 
+    /**
+     * Send this response when api user provide fields that doesn't exist in our application
+     *
+     * @param $errors
+     * @return mixed
+     */
+    public function sendUnknownFieldResponse($errors)
+    {
+        return response()->json((['status' => 400, 'unknown_fields' => $errors]), 400);
+    }
+ 
+    /**
+     * Send this response when api user provide filter that doesn't exist in our application
+     *
+     * @param $errors
+     * @return mixed
+     */
+    public function sendInvalidFilterResponse($errors)
+    {
+        return response()->json((['status' => 400, 'invalid_filters' => $errors]), 400);
+    }
+ 
+    /**
+     * Send this response when api user provide incorrect data type for the field
+     *
+     * @param $errors
+     * @return mixed
+     */
+    public function sendInvalidFieldResponse($errors)
+    {
+        return response()->json((['status' => 400, 'invalid_fields' => $errors]), 400);
+    }
+ 
+    /**
+     * Send this response when a api user try access a resource that they don't belong
+     *
+     * @return string
+     */
+    public function sendForbiddenResponse()
+    {
+        return response()->json(['status' => 403, 'message' => 'Forbidden'], 403);
+    }
+ 
+    /**
+     * Send 404 not found response
+     *
+     * @param string $message
+     * @return string
+     */
+    public function sendNotFoundResponse($message = '')
+    {
+        if ($message === '') {
+            $message = 'The requested resource was not found';
+        }
+ 
+        return response()->json(['status' => 404, 'message' => $message], 404);
+    }
+ 
+    /**
+     * Send empty data response
+     *
+     * @return string
+     */
+    public function sendEmptyDataResponse()
+    {
+        return response()->json(['data' => new \StdClass()]);
+    }
+ 
+    /**
+     * Return collection response from the application
+     *
+     * @param array|LengthAwarePaginator|\Illuminate\Database\Eloquent\Collection $collection
+     * @param \Closure|TransformerAbstract $callback
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function respondWithCollection($collection, $callback)
+    {
+        $resource = new Collection($collection, $callback);
+ 
+        //set empty data pagination
+        if (empty($collection)) {
+            $collection = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
+            $resource = new Collection($collection, $callback);
+        }
+        $resource->setPaginator(new IlluminatePaginatorAdapter($collection));
+ 
+        $rootScope = $this->fractal->createData($resource);
+ 
+        return $this->respondWithArray($rootScope->toArray());
+    }
+ 
+    /**
+     * Return single item response from the application
+     *
+     * @param Model $item
+     * @param \Closure|TransformerAbstract $callback
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function respondWithItem($item, $callback)
+    {
+        $resource = new Item($item, $callback);
+        $rootScope = $this->fractal->createData($resource);
+ 
+        return $this->respondWithArray($rootScope->toArray());
+    }
+ 
+    /**
+     * Return a json response from the application
+     *
+     * @param array $array
+     * @param array $headers
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function respondWithArray(array $array, array $headers = [])
+    {
+        return response()->json($array, $this->statusCode, $headers);
+    }
+}
+```
+
+## 10、用 Fractal 格式化 Response
+安装 `composer require league/fractal`
+
+创建 Transformer
+
+```
+<?php //app/Transformers/UserTransformer.php
+ 
+namespace App\Transformers;
+ 
+use App\Models\User;
+use League\Fractal\TransformerAbstract;
+ 
+class UserTransformer extends TransformerAbstract
+{
+    public function transform(User $user)
+    {
+        $formattedUser = [
+            'uid'                   => $user->uid,
+            'firstName'             => $user->firstName,
+            'lastName'              => $user->lastName,
+            'middleName'            => $user->middleName,
+            'username'              => $user->username,
+            'email'                 => $user->email,
+            'address'               => $user->address,
+            'zipCode'               => $user->zipCode,
+            'city'                  => $user->city,
+            'state'                 => $user->state,
+            'country'               => $user->country,
+            'phone'                 => $user->phone,
+            'mobile'                => $user->mobile,
+            'type'                  => $user->type,
+            'createdAt'             => (string) $user->created_at,
+            'updatedAt'             => (string) $user->updated_at
+        ];
+ 
+        return $formattedUser;
+    }
+}
+```
+
+更新 UserController 加入 Transformer
+
+```
+<?php
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use App\Repositories\Contracts\UserRepository;
+use Illuminate\Http\Request;
+use App\Transformers\UserTransformer;
+
+class UserController extends Controller
+{
+    /**
+     * Instance of UserRepository
+     *
+     * @var UserRepository
+     */
+    private $userRepository;
+
+    /**
+     * Instanceof UserTransformer
+     *
+     * @var UserTransformer
+     */
+    private $userTransformer;
+
+    /**
+     * Constructor
+     *
+     * @param UserRepository $userRepository
+     * @param UserTransformer $userTransformer
+     */
+    public function __construct(UserRepository $userRepository, UserTransformer $userTransformer)
+    {
+        $this->userRepository = $userRepository;
+        $this->userTransformer = $userTransformer;
+        parent::__construct();
+    }
+
+    /**
+     * Display a listing of the resource.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function index(Request $request)
+    {
+        $users = $this->userRepository->findBy($request->all());
+        return $this->respondWithCollection($users, $this->userTransformer);
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param $id
+     * @return \Illuminate\Http\JsonResponse|string
+     */
+    public function show($id)
+    {
+        $user = $this->userRepository->findOne($id);
+        if (!$user instanceof User) {
+            return $this->sendNotFoundResponse("The user with id {$id} doesn't exist");
+        }
+        // Authorization
+        $this->authorize('show', $user);
+        return $this->respondWithItem($user, $this->userTransformer);
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|string
+     */
+    public function store(Request $request)
+    {
+        // Validation
+        $validatorResponse = $this->validateRequest($request, $this->storeRequestValidationRules($request));
+        // Send failed response if validation fails
+        if ($validatorResponse !== true) {
+            return $this->sendInvalidFieldResponse($validatorResponse);
+        }
+        $user = $this->userRepository->save($request->all());
+        if (!$user instanceof User) {
+            return $this->sendCustomResponse(500, 'Error occurred on creating User');
+        }
+        return $this->setStatusCode(201)->respondWithItem($user, $this->userTransformer);
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param Request $request
+     * @param $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function update(Request $request, $id)
+    {
+        // Validation
+        $validatorResponse = $this->validateRequest($request, $this->updateRequestValidationRules($request));
+        // Send failed response if validation fails
+        if ($validatorResponse !== true) {
+            return $this->sendInvalidFieldResponse($validatorResponse);
+        }
+        $user = $this->userRepository->findOne($id);
+        if (!$user instanceof User) {
+            return $this->sendNotFoundResponse("The user with id {$id} doesn't exist");
+        }
+        // Authorization
+        $this->authorize('update', $user);
+        $user = $this->userRepository->update($user, $request->all());
+        return $this->respondWithItem($user, $this->userTransformer);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param $id
+     * @return \Illuminate\Http\JsonResponse|string
+     */
+    public function destroy($id)
+    {
+        $user = $this->userRepository->findOne($id);
+        if (!$user instanceof User) {
+            return $this->sendNotFoundResponse("The user with id {$id} doesn't exist");
+        }
+        // Authorization
+        $this->authorize('destroy', $user);
+        $this->userRepository->delete($user);
+        return response()->json(null, 204);
+    }
+
+    /**
+     * Store Request Validation Rules
+     *
+     * @param Request $request
+     * @return array
+     */
+    private function storeRequestValidationRules(Request $request)
+    {
+        $rules = [
+            'email'                 => 'email|required|unique:users',
+            'firstName'             => 'required|max:100',
+            'middleName'            => 'max:50',
+            'lastName'              => 'required|max:100',
+            'username'              => 'max:50',
+            'address'               => 'max:255',
+            'zipCode'               => 'max:10',
+            'phone'                 => 'max:20',
+            'mobile'                => 'max:20',
+            'city'                  => 'max:100',
+            'state'                 => 'max:100',
+            'country'               => 'max:100',
+            'password'              => 'min:5'
+        ];
+        $requestUser = $request->user();
+        // Only admin user can set admin role.
+        if ($requestUser instanceof User && $requestUser->role === User::ADMIN_ROLE) {
+            $rules['role'] = 'in:BASIC_USER,ADMIN_USER';
+        } else {
+            $rules['role'] = 'in:BASIC_USER';
+        }
+        return $rules;
+    }
+    
+    /**
+     * Update Request validation Rules
+     *
+     * @param Request $request
+     * @return array
+     */
+    private function updateRequestValidationRules(Request $request)
+    {
+        $userId = $request->segment(2);
+        $rules = [
+            'email'                 => 'email|unique:users,email,'. $userId,
+            'firstName'             => 'max:100',
+            'middleName'            => 'max:50',
+            'lastName'              => 'max:100',
+            'username'              => 'max:50',
+            'address'               => 'max:255',
+            'zipCode'               => 'max:10',
+            'phone'                 => 'max:20',
+            'mobile'                => 'max:20',
+            'city'                  => 'max:100',
+            'state'                 => 'max:100',
+            'country'               => 'max:100',
+            'password'              => 'min:5'
+        ];
+        $requestUser = $request->user();
+        // Only admin user can update admin role.
+        if ($requestUser instanceof User && $requestUser->role === User::ADMIN_ROLE) {
+            $rules['role'] = 'in:BASIC_USER,ADMIN_USER';
+        } else {
+            $rules['role'] = 'in:BASIC_USER';
+        }
+        return $rules;
+    }
+}
+
+```
+
+
 
 
 

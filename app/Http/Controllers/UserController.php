@@ -1,11 +1,12 @@
 <?php //app/Http/Controllers/UserController.php
- 
+
 namespace App\Http\Controllers;
- 
+
 use App\Models\User;
 use App\Repositories\Contracts\UserRepository;
 use Illuminate\Http\Request;
- 
+use App\Transformers\UserTransformer;
+
 class UserController extends Controller
 {
     /**
@@ -14,24 +15,27 @@ class UserController extends Controller
      * @var UserRepository
      */
     private $userRepository;
- 
+
     /**
-     * Assign the validatorName that will be used for validation
+     * Instanceof UserTransformer
      *
-     * @var string
+     * @var UserTransformer
      */
-    protected $validatorName = 'User';
- 
+    private $userTransformer;
+
     /**
      * Constructor
      *
      * @param UserRepository $userRepository
+     * @param UserTransformer $userTransformer
      */
-    public function __construct(UserRepository $userRepository)
+    public function __construct(UserRepository $userRepository, UserTransformer $userTransformer)
     {
         $this->userRepository = $userRepository;
+        $this->userTransformer = $userTransformer;
+        parent::__construct();
     }
- 
+
     /**
      * Display a listing of the resource.
      *
@@ -41,10 +45,9 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $users = $this->userRepository->findBy($request->all());
- 
-        return response()->json(['data' => $users], 200);
+        return $this->respondWithCollection($users, $this->userTransformer);
     }
- 
+
     /**
      * Display the specified resource.
      *
@@ -54,14 +57,14 @@ class UserController extends Controller
     public function show($id)
     {
         $user = $this->userRepository->findOne($id);
- 
         if (!$user instanceof User) {
-            return response()->json(['message' => "The user with id {$id} doesn't exist"], 404);
+            return $this->sendNotFoundResponse("The user with id {$id} doesn't exist");
         }
- 
-        return response()->json(['data' => $user], 200);
+        // Authorization
+        $this->authorize('show', $user);
+        return $this->respondWithItem($user, $this->userTransformer);
     }
- 
+
     /**
      * Store a newly created resource in storage.
      *
@@ -71,17 +74,18 @@ class UserController extends Controller
     public function store(Request $request)
     {
         // Validation
-        $validatorResponse = $this->validateRequest($request, $this->storeRequestValidationRules());
- 
+        $validatorResponse = $this->validateRequest($request, $this->storeRequestValidationRules($request));
         // Send failed response if validation fails
         if ($validatorResponse !== true) {
             return $this->sendInvalidFieldResponse($validatorResponse);
         }
- 
-     /*Rest of the codes*/
+        $user = $this->userRepository->save($request->all());
+        if (!$user instanceof User) {
+            return $this->sendCustomResponse(500, 'Error occurred on creating User');
+        }
+        return $this->setStatusCode(201)->respondWithItem($user, $this->userTransformer);
     }
- 
- 
+
     /**
      * Update the specified resource in storage.
      *
@@ -93,24 +97,47 @@ class UserController extends Controller
     {
         // Validation
         $validatorResponse = $this->validateRequest($request, $this->updateRequestValidationRules($request));
- 
         // Send failed response if validation fails
         if ($validatorResponse !== true) {
             return $this->sendInvalidFieldResponse($validatorResponse);
         }
- 
-        /*Rest of the codes*/
+        $user = $this->userRepository->findOne($id);
+        if (!$user instanceof User) {
+            return $this->sendNotFoundResponse("The user with id {$id} doesn't exist");
+        }
+        // Authorization
+        $this->authorize('update', $user);
+        $user = $this->userRepository->update($user, $request->all());
+        return $this->respondWithItem($user, $this->userTransformer);
     }
- 
- 
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param $id
+     * @return \Illuminate\Http\JsonResponse|string
+     */
+    public function destroy($id)
+    {
+        $user = $this->userRepository->findOne($id);
+        if (!$user instanceof User) {
+            return $this->sendNotFoundResponse("The user with id {$id} doesn't exist");
+        }
+        // Authorization
+        $this->authorize('destroy', $user);
+        $this->userRepository->delete($user);
+        return response()->json(null, 204);
+    }
+
     /**
      * Store Request Validation Rules
      *
+     * @param Request $request
      * @return array
      */
-    private function storeRequestValidationRules()
+    private function storeRequestValidationRules(Request $request)
     {
-        return [
+        $rules = [
             'email'                 => 'email|required|unique:users',
             'firstName'             => 'required|max:100',
             'middleName'            => 'max:50',
@@ -123,11 +150,18 @@ class UserController extends Controller
             'city'                  => 'max:100',
             'state'                 => 'max:100',
             'country'               => 'max:100',
-            'type'                  => '',
             'password'              => 'min:5'
         ];
+        $requestUser = $request->user();
+        // Only admin user can set admin role.
+        if ($requestUser instanceof User && $requestUser->role === User::ADMIN_ROLE) {
+            $rules['role'] = 'in:BASIC_USER,ADMIN_USER';
+        } else {
+            $rules['role'] = 'in:BASIC_USER';
+        }
+        return $rules;
     }
- 
+
     /**
      * Update Request validation Rules
      *
@@ -137,7 +171,7 @@ class UserController extends Controller
     private function updateRequestValidationRules(Request $request)
     {
         $userId = $request->segment(2);
-        return [
+        $rules = [
             'email'                 => 'email|unique:users,email,'. $userId,
             'firstName'             => 'max:100',
             'middleName'            => 'max:50',
@@ -150,27 +184,15 @@ class UserController extends Controller
             'city'                  => 'max:100',
             'state'                 => 'max:100',
             'country'               => 'max:100',
-            'type'                  => '',
             'password'              => 'min:5'
         ];
-    }
- 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param $id
-     * @return \Illuminate\Http\JsonResponse|string
-     */
-    public function destroy($id)
-    {
-        $user = $this->userRepository->findOne($id);
- 
-        if (!$user instanceof User) {
-            return response()->json(['message' => "The user with id {$id} doesn't exist"], 404);
+        $requestUser = $request->user();
+        // Only admin user can update admin role.
+        if ($requestUser instanceof User && $requestUser->role === User::ADMIN_ROLE) {
+            $rules['role'] = 'in:BASIC_USER,ADMIN_USER';
+        } else {
+            $rules['role'] = 'in:BASIC_USER';
         }
- 
-        $this->userRepository->delete($user);
- 
-        return response()->json(null, 204);
+        return $rules;
     }
 }
