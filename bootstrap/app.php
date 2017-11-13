@@ -111,6 +111,7 @@ $app->withEloquent();
 // Enable auth middleware (shipped with Lumen)
 $app->routeMiddleware([
     'auth' => App\Http\Middleware\Authenticate::class,
+    'throttle' => App\Http\Middleware\ThrottleRequests::class
 ]);
 
 // Finally register two service providers - original one and Lumen adapter
@@ -123,5 +124,11 @@ $app->middleware([
     \Barryvdh\Cors\HandleCors::class,
 ]);
 $app->register(Barryvdh\Cors\LumenServiceProvider::class);
+
+// load mail configurations
+$app->configure('mail');
+// load database configurations
+$app->configure('database');
+$app->register(\Illuminate\Mail\MailServiceProvider::class);
 
 return $app;

@@ -73,8 +73,8 @@ abstract class AbstractEloquentRepository implements BaseRepository
         $limit = !empty($searchCriteria['per_page']) ? (int)$searchCriteria['per_page'] : 15; // it's needed for pagination
         $queryBuilder = $this->model->where(function ($query) use ($searchCriteria) {
             $this->applySearchCriteriaInQueryBuilder($query, $searchCriteria);
-        }
-        );
+        });
+
         return $queryBuilder->paginate($limit);
     }
 
@@ -101,6 +101,7 @@ abstract class AbstractEloquentRepository implements BaseRepository
                 $queryBuilder->where($key, $operator, $value);
             }
         }
+
         return $queryBuilder;
     }
 
@@ -111,6 +112,7 @@ abstract class AbstractEloquentRepository implements BaseRepository
     {
         // generate uid
         $data['uid'] = Uuid::uuid4();
+
         return $this->model->create($data);
     }
 
@@ -130,6 +132,7 @@ abstract class AbstractEloquentRepository implements BaseRepository
         $model->save();
         // get updated model from database
         $model = $this->findOne($model->uid);
+
         return $model;
     }
 

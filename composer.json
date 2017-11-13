@@ -11,7 +11,8 @@
         "ramsey/uuid": "^3.7",
         "league/fractal": "^0.17.0",
         "dusterio/lumen-passport": "^0.2.4",
-        "barryvdh/laravel-cors": "^0.10.0"
+        "barryvdh/laravel-cors": "^0.10.0",
+        "illuminate/mail": "^5.5"
     },
     "require-dev": {
         "fzaninotto/faker": "~1.4",

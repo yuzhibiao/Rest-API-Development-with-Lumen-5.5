@@ -3,7 +3,9 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Factory as Auth;
+use Laravel\Passport\Http\Middleware\CheckClientCredentials;
 
 class Authenticate
 {
@@ -24,7 +26,7 @@ class Authenticate
     {
         $this->auth = $auth;
     }
-
+    
     /**
      * Handle an incoming request.
      *
@@ -35,10 +37,17 @@ class Authenticate
      */
     public function handle($request, Closure $next, $guard = null)
     {
+        // First, check if the access_token created by the password grant is valid
         if ($this->auth->guard($guard)->guest()) {
-            return response('Unauthorized.', 401);
+            // Then check, access_token created by the client_credentials grant is valid.
+            // We need this checking because we could use either password grant or client_credentials grant.
+            try {
+                app(CheckClientCredentials::class)->handle($request, function () {
+                });
+            } catch (AuthenticationException $e) {
+                return response()->json((['status' => 401, 'message' => 'Unauthorized']), 401);
+            }
         }
-
         return $next($request);
     }
 }
