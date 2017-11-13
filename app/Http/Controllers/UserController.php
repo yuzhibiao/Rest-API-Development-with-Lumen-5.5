@@ -70,14 +70,17 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-        $user = $this->userRepository->save($request->all());
+        // Validation
+        $validatorResponse = $this->validateRequest($request, $this->storeRequestValidationRules());
  
-        if (!$user instanceof User) {
-            return response()->json(['message' => "Error occurred on creating user"], 500);
+        // Send failed response if validation fails
+        if ($validatorResponse !== true) {
+            return $this->sendInvalidFieldResponse($validatorResponse);
         }
  
-        return response()->json(['data' => $user], 201);
+     /*Rest of the codes*/
     }
+ 
  
     /**
      * Update the specified resource in storage.
@@ -88,17 +91,68 @@ class UserController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $user = $this->userRepository->findOne($id);
+        // Validation
+        $validatorResponse = $this->validateRequest($request, $this->updateRequestValidationRules($request));
  
-        if (!$user instanceof User) {
-            return response()->json(['message' => "The user with id {$id} doesn't exist"], 404);
+        // Send failed response if validation fails
+        if ($validatorResponse !== true) {
+            return $this->sendInvalidFieldResponse($validatorResponse);
         }
  
-        $inputs = $request->all();
+        /*Rest of the codes*/
+    }
  
-        $user = $this->userRepository->update($user, $inputs);
  
-        return response()->json(['data' => $user], 200);
+    /**
+     * Store Request Validation Rules
+     *
+     * @return array
+     */
+    private function storeRequestValidationRules()
+    {
+        return [
+            'email'                 => 'email|required|unique:users',
+            'firstName'             => 'required|max:100',
+            'middleName'            => 'max:50',
+            'lastName'              => 'required|max:100',
+            'username'              => 'max:50',
+            'address'               => 'max:255',
+            'zipCode'               => 'max:10',
+            'phone'                 => 'max:20',
+            'mobile'                => 'max:20',
+            'city'                  => 'max:100',
+            'state'                 => 'max:100',
+            'country'               => 'max:100',
+            'type'                  => '',
+            'password'              => 'min:5'
+        ];
+    }
+ 
+    /**
+     * Update Request validation Rules
+     *
+     * @param Request $request
+     * @return array
+     */
+    private function updateRequestValidationRules(Request $request)
+    {
+        $userId = $request->segment(2);
+        return [
+            'email'                 => 'email|unique:users,email,'. $userId,
+            'firstName'             => 'max:100',
+            'middleName'            => 'max:50',
+            'lastName'              => 'max:100',
+            'username'              => 'max:50',
+            'address'               => 'max:255',
+            'zipCode'               => 'max:10',
+            'phone'                 => 'max:20',
+            'mobile'                => 'max:20',
+            'city'                  => 'max:100',
+            'state'                 => 'max:100',
+            'country'               => 'max:100',
+            'type'                  => '',
+            'password'              => 'min:5'
+        ];
     }
  
     /**
