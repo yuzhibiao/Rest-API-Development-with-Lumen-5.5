@@ -105,7 +105,7 @@ class UserController extends Controller
 
 ```
 
-> 这里增加了一个 uid 的字段，是使用的替代数据自增 ID 的用途。具体参考 https://philsturgeon.uk/http/2015/09/03/auto-incrementing-to-destruction/ ，采用第三方包 https://github.com/ramsey/uuid；
+> 这里增加了一个 uid 的字段，是使用的替代数据库自增 ID 的用途。具体参考 https://philsturgeon.uk/http/2015/09/03/auto-incrementing-to-destruction/ ，采用第三方包 https://github.com/ramsey/uuid；
 
 运行 `php artisan migrate`
 
@@ -169,6 +169,320 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
     ];
 }
 ```
+
+## 创建 Repositories
+创建 Repositories 文件夹，为每个 Repository, 我们要创建一个接口和实现的接口。首先,我们要创建一个 BaseRepository 接口。所有其他接口扩展 BaseRepository 接口。
+
+```
+<?php //app/Repositories/Contracts/BaseRepository.php
+ 
+namespace App\Repositories\Contracts;
+ 
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+ 
+interface BaseRepository
+{
+    /**
+     * find a resource by id
+     *
+     * @param $id
+     * @return Model|null
+     */
+    public function findOne($id);
+ 
+    /**
+     * find a resource by criteria
+     *
+     * @param array $criteria
+     * @return Model|null
+     */
+    public function findOneBy(array $criteria);
+ 
+    /**
+     * Search All resources
+     *
+     * @param array $searchCriteria
+     * @return Collection
+     */
+    public function findBy(array $searchCriteria = []);
+ 
+    /**
+     * Search All resources by any values of a key
+     *
+     * @param string $key
+     * @param array $values
+     * @return Collection
+     */
+    public function findIn($key, array $values);
+ 
+    /**
+     * save a resource
+     *
+     * @param array $data
+     * @return Model
+     */
+    public function save(array $data);
+ 
+    /**
+     * update a resource
+     *
+     * @param Model $model
+     * @param array $data
+     * @return Model
+     */
+    public function update(Model $model, array $data);
+ 
+    /**
+     * delete a resource
+     *
+     * @param Model $model
+     * @return mixed
+     */
+    public function delete(Model $model);
+ 
+    /**
+     * updated records by specific key and values
+     *
+     * @param string $key
+     * @param array $values
+     * @param array $data
+     * @return Collection
+     */
+    public function updateIn($key, array $values, array $data);
+}
+
+```
+
+我们已经创建了一个 BaseRepository 接口, 所有必要的方法与数据库进行交互。创建一个抽象类名 AbstractEloquentRepository 实现 BaseRepository 接口。
+
+```
+<?php //app/Repositories/AbstractEloquentRepository.php
+ 
+namespace App\Repositories;
+ 
+use App\Repositories\Contracts\BaseRepository;
+use Illuminate\Database\Eloquent\Model;
+use Ramsey\Uuid\Uuid;
+ 
+abstract class AbstractEloquentRepository implements BaseRepository
+{
+    /**
+     * Name of the Model with absolute namespace
+     *
+     * @var string
+     */
+    protected $modelName;
+ 
+    /**
+     * Instance that extends Illuminate\Database\Eloquent\Model
+     *
+     * @var Model
+     */
+    protected $model;
+ 
+ 
+    public function __construct()
+    {
+        $this->setModel();
+    }
+ 
+    /**
+     * Instantiate Model
+     *
+     * @throws \Exception
+     */
+    public function setModel()
+    {
+        //check if the class exists
+        if (class_exists($this->modelName)) {
+            $this->model = new $this->modelName;
+ 
+            //check object is a instanceof Illuminate\Database\Eloquent\Model
+            if (!$this->model instanceof Model) {
+                throw new \Exception("{$this->modelName} must be an instance of Illuminate\Database\Eloquent\Model");
+            }
+ 
+        } else {
+            throw new \Exception('No model name defined');
+        }
+    }
+ 
+    /**
+     * Get Model instance
+     *
+     * @return Model
+     */
+    public function getModel()
+    {
+        return $this->model;
+    }
+ 
+    /**
+     * @inheritdoc
+     */
+    public function findOne($id)
+    {
+        return $this->findOneBy(['uid' => $id]);
+    }
+ 
+    /**
+     * @inheritdoc
+     */
+    public function findOneBy(array $criteria)
+    {
+        return $this->model->where($criteria)->first();
+    }
+ 
+    /**
+     * @inheritdoc
+     */
+    public function findBy(array $searchCriteria = [])
+    {
+        $limit = !empty($searchCriteria['per_page']) ? (int)$searchCriteria['per_page'] : 15; // it's needed for pagination
+ 
+        $queryBuilder = $this->model->where(function ($query) use ($searchCriteria) {
+ 
+            $this->applySearchCriteriaInQueryBuilder($query, $searchCriteria);
+        }
+        );
+ 
+        return $queryBuilder->paginate($limit);
+    }
+ 
+ 
+    /**
+     * Apply condition on query builder based on search criteria
+     *
+     * @param Object $queryBuilder
+     * @param array $searchCriteria
+     * @return mixed
+     */
+    protected function applySearchCriteriaInQueryBuilder($queryBuilder, array $searchCriteria = [])
+    {
+ 
+        foreach ($searchCriteria as $key => $value) {
+ 
+            //skip pagination related query params
+            if (in_array($key, ['page', 'per_page'])) {
+                continue;
+            }
+ 
+            //we can pass multiple params for a filter with commas
+            $allValues = explode(',', $value);
+ 
+            if (count($allValues) > 1) {
+                $queryBuilder->whereIn($key, $allValues);
+            } else {
+                $operator = '=';
+                $queryBuilder->where($key, $operator, $value);
+            }
+        }
+ 
+        return $queryBuilder;
+    }
+ 
+    /**
+     * @inheritdoc
+     */
+    public function save(array $data)
+    {
+        // generate uid
+        $data['uid'] = Uuid::uuid4();
+ 
+        return $this->model->create($data);
+    }
+ 
+    /**
+     * @inheritdoc
+     */
+    public function update(Model $model, array $data)
+    {
+        $fillAbleProperties = $this->model->getFillable();
+ 
+        foreach ($data as $key => $value) {
+ 
+            // update only fillAble properties
+            if (in_array($key, $fillAbleProperties)) {
+                $model->$key = $value;
+            }
+        }
+ 
+        // update the model
+        $model->save();
+ 
+        // get updated model from database
+        $model = $this->findOne($model->uid);
+ 
+        return $model;
+    }
+ 
+    /**
+     * @inheritdoc
+     */
+    public function findIn($key, array $values)
+    {
+        return $this->model->whereIn($key, $values)->get();
+    }
+ 
+    /**
+     * @inheritdoc
+     */
+    public function delete(Model $model)
+    {
+        return $model->delete();
+    }
+}
+```
+
+创建 UserRepository 、 EloquentUserRepository 实现用户仓库
+
+```
+<?php //app/Repositories/Contracts/UserRepository.php
+ 
+namespace App\Repositories\Contracts;
+ 
+interface UserRepository extends BaseRepository
+{
+}
+```
+
+```
+<?php //app/Repositories/EloquentUserRepository.php
+ 
+namespace App\Repositories;
+ 
+use App\Repositories\Contracts\UserRepository;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+ 
+class EloquentUserRepository extends AbstractEloquentRepository implements UserRepository
+{
+    /**
+     * Model name
+     *
+     * @var string
+     */
+    protected $modelName = User::class;
+ 
+ 
+    /*
+     * @inheritdoc
+     */
+    public function save(array $data)
+    {
+        // update password
+        if (isset($data['password'])) {
+            $data['password'] = Hash::make($data['password']);
+        }
+ 
+        $user = parent::save($data);
+ 
+        return $user;
+    }
+}
+```
+
 
 
 
