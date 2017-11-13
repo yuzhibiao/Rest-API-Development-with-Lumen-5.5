@@ -9,6 +9,7 @@ use League\Fractal\Manager;
 class Controller extends BaseController
 {
     use ResponseTrait;
+    
     /**
       * Constructor
       *
@@ -19,6 +20,7 @@ class Controller extends BaseController
         $fractal = $fractal === null ? new Manager() : $fractal;
         $this->setFractal($fractal);
     }
+
     /**
       * Validate HTTP request against the rules
       *

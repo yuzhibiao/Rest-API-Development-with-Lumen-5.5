@@ -1254,6 +1254,60 @@ class UserController extends Controller
 
 ```
 
+## 11、使用 Fake Data 测试
+创建 UserFactor
+
+```
+<?php // database/factories/UserFactory.php
+
+$factory->define(App\Models\User::class, function (Faker\Generator $faker) {
+    return [
+        'uid'                   => str_random(32),
+        'firstName'             => $faker->firstName,
+        'lastName'              => $faker->lastName,
+        'email'                 => $faker->email,
+        'middleName'            => $faker->lastName,
+        'password'              => \Illuminate\Support\Facades\Hash::make('test-password'),
+        'address'               => $faker->address,
+        'zipCode'               => $faker->postcode,
+        'username'              => $faker->userName,
+        'city'                  => $faker->city,
+        'state'                 => $faker->state,
+        'country'               => 'CHN',
+        'phone'                 => $faker->phoneNumber,
+        'mobile'                => $faker->phoneNumber,
+        'type'                  => 'USER',
+        'isActive'              => rand(0, 1)
+    ];
+});
+```
+
+使用 make:seeder 创建 SeedClass
+`php artisan make:seeder UsersTableSeeder`
+
+修改 UsersTableSeeder.php 中的 up 方法
+
+```
+// database/seeds/UsersTableSeeder.php
+ 
+public function run()
+{
+    factory(App\Models\User::class, 5)->create();
+}
+```
+
+DatabaseSeeder 中 up 方法
+```
+	public function run()
+    {
+        // $this->call('UsersTableSeeder');
+        $this->call('UsersTableSeeder');
+    }
+```
+
+运行 `php artisan db:seed`
+
+### 12、身份验证
 
 
 
