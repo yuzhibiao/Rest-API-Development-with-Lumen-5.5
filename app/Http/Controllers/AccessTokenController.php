@@ -36,7 +36,7 @@ class AccessTokenController extends Controller
     public function createAccessToken(Request $request)
     {
         $inputs = $request->all();
-        $user = null;
+        $user   = null;
         if (isset($inputs['username']) && $inputs['grant_type'] == 'password') {
             $user = $this->userRepository->findOneBy(['email' => $inputs['username']]);
         }

@@ -100,6 +100,8 @@ $app->router->group([
     require __DIR__.'/../routes/web.php';
 });
 
+\Dusterio\LumenPassport\LumenPassport::routes($app);
+
 // Enable Facades
 $app->withFacades();
 
@@ -116,6 +118,10 @@ $app->register(Laravel\Passport\PassportServiceProvider::class);
 $app->register(Dusterio\LumenPassport\PassportServiceProvider::class);
 $app->register(App\Providers\AuthServiceProvider::class);
 
-\Dusterio\LumenPassport\LumenPassport::routes($app);
+$app->configure('cors');
+$app->middleware([
+    \Barryvdh\Cors\HandleCors::class,
+]);
+$app->register(Barryvdh\Cors\LumenServiceProvider::class);
 
 return $app;
