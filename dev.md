@@ -170,7 +170,7 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
 }
 ```
 
-## 创建 Repositories
+## 6、创建 Repositories
 创建 Repositories 文件夹，为每个 Repository, 我们要创建一个接口和实现的接口。首先,我们要创建一个 BaseRepository 接口。所有其他接口扩展 BaseRepository 接口。
 
 ```
@@ -481,6 +481,65 @@ class EloquentUserRepository extends AbstractEloquentRepository implements UserR
         return $user;
     }
 }
+```
+
+## 7、Service Provider and Service Container
+
+创建 RepositoriesServiceProvider
+
+```
+<?php //app/Providers/RepositoriesServiceProvider.php
+ 
+namespace App\Providers;
+ 
+use Illuminate\Support\ServiceProvider;
+use App\Repositories\Contracts\UserRepository;
+use App\Repositories\EloquentUserRepository;
+ 
+class RepositoriesServiceProvider extends ServiceProvider
+{
+    /**
+     * Indicates if loading of the provider is deferred.
+     *
+     * @var bool
+     */
+    protected $defer = true;
+ 
+    /**
+     * Register any application services.
+     *
+     * @return void
+     */
+    public function register()
+    {
+        $this->app->bind(UserRepository::class, EloquentUserRepository::class);
+    }
+ 
+    /**
+     * Get the services provided by the provider.
+     *
+     * @return array
+     */
+    public function provides()
+    {
+        return [
+            UserRepository::class
+        ];
+    }
+}
+```
+
+### 注册服务供应商
+
+在 bootstrap/app.php 文件中添加
+
+`$app->register(App\Providers\RepositoriesServiceProvider::class);`
+
+同时开启 facade 和 eloquent
+
+```
+$app->withFacades();
+$app->withEloquent();
 ```
 
 
