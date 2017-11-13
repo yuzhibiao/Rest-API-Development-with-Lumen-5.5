@@ -15,7 +15,6 @@ class EloquentUserRepository extends AbstractEloquentRepository implements UserR
      */
     protected $modelName = User::class;
  
- 
     /*
      * @inheritdoc
      */

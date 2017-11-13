@@ -1308,8 +1308,104 @@ DatabaseSeeder 中 up 方法
 运行 `php artisan db:seed`
 
 ### 12、身份验证
+Lumen 不集成 Passport 组件，我们需要加载第三方包 https://github.com/dusterio/lumen-passport；
 
+composer 安装包
+`composer require dusterio/lumen-passport`
 
+安装完成，做初始化配置 bootstrap/app.php
+
+```
+// Enable Facades
+$app->withFacades();
+
+// Enable Eloquent
+$app->withEloquent();
+
+// Enable auth middleware (shipped with Lumen)
+$app->routeMiddleware([
+    'auth' => App\Http\Middleware\Authenticate::class,
+]);
+
+// Finally register two service providers - original one and Lumen adapter
+$app->register(Laravel\Passport\PassportServiceProvider::class);
+$app->register(Dusterio\LumenPassport\PassportServiceProvider::class);
+```
+
+做初始化操作
+
+```
+# Create new tables for Passport
+php artisan migrate
+ 
+# Install encryption keys and other necessary stuff for Passport
+php artisan passport:install
+```
+
+### OAuth2 配置
+Lumen 默认没有 config 文件夹，创建文件夹以及 auth.php 配置文件
+
+```
+<?php //config/auth.php
+
+return [ 'defaults' => [
+        'guard' => 'api',
+        'passwords' => 'users',
+    ],
+ 
+    'guards' => [
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
+    ],
+ 
+    'providers' => [
+        'users' => [
+            'driver' => 'eloquent',
+            'model' => \App\Models\User::class
+        ]
+    ]
+];
+```
+
+添加 HasApiTokens trait 到 User Model.
+
+```
+use Laravel\Passport\HasApiTokens;
+class User extends Model implements AuthenticatableContract, AuthorizableContract
+{
+    use Authenticatable, Authorizable, SoftDeletes, HasApiTokens;
+ 
+    /* rest of the model */
+}
+```
+
+修改访问权限
+
+```
+// app/Providers/AuthServiceProvider.php
+ 
+    Passport::tokensCan([
+        'admin' => 'Admin user scope',
+        'basic' => 'Basic user scope',
+    ]);
+
+```
+
+路由增加中间件
+
+```
+//routes/web.php
+ 
+$router->group(['middleware' => 'auth:api'], function () use ($router) {
+    $router->post('users', 'UserController@store');
+    $router->get('users', 'UserController@index');
+    $router->get('users/{id}', 'UserController@show');
+    $router->put('users/{id}', 'UserController@update');
+    $router->delete('users/{id}', 'UserController@destroy');
+});
+```
 
 
 
